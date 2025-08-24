@@ -1,0 +1,147 @@
+name: Deploy to ECS
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        required: true
+        type: string
+      aws-account-id:
+        required: true
+        type: string
+      aws-region:
+        required: true
+        type: string
+      service-type:
+        required: true
+        type: string
+    outputs:
+      deployment-status:
+        description: "Status of the ECS deployment"
+        value: ${{ jobs.deploy.outputs.deployment-status }}
+
+env:
+  AWS_ACCOUNT_ID: ${{ inputs.aws-account-id }}
+  AWS_REGION: ${{ inputs.aws-region }}
+  SERVICE_TYPE: ${{ inputs.service-type }}
+  ECR_REPOSITORY: soa-ecr-codeland-${{ inputs.service-type }}
+  ECS_CLUSTER: soa-ecs-codeland-${{ inputs.service-type }}
+  ECS_SERVICE: soa-ecs-service-codeland-${{ inputs.service-type }}
+  CONTAINER_NAME: soa-container-codeland-${{ inputs.service-type }}
+  ECS_TASK_DEFINITION: ./backend/taskdef_dev.json
+  ENVIRONMENT: develop
+  # TODO: Thay thế bằng giá trị môi trường của bạn
+  SECRET_ARN: rds!db-5d9f82d2-f2c5-467e-9b94-462be22f5508-YqTmgP
+  
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    outputs:
+      deployment-status: ${{ steps.set-status.outputs.status }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/SOAGitHubActionsRole
+          role-session-name: SOAGitHubActionsRole
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Generate image tag
+        id: generate-tag
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "IMAGE_TAG=dev-${SHORT_SHA}" >> $GITHUB_ENV
+          
+      - name: Set Image URI
+        id: set-image
+        run: |
+          IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
+
+      - name: Process task definition template
+        run: |
+          # Replace environment variables in task definition template
+          envsubst < ${{ env.ECS_TASK_DEFINITION }} > taskdef-processed.json
+          echo "Processed task definition created at taskdef-processed.json"
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: taskdef-processed.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ env.IMAGE_URI }}
+
+      - name: Get current desired count
+        id: get-desired-count
+        run: |
+          CURRENT_DESIRED_COUNT=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --query "services[0].desiredCount" \
+            --output text)
+          
+          # If desired count current is 0, upate to 1
+          if [ "$CURRENT_DESIRED_COUNT" -eq "0" ]; then
+            echo "Current desired count is 0, will update to 1"
+            DESIRED_COUNT=1
+          else
+            echo "Current desired count is ${CURRENT_DESIRED_COUNT}, keeping it unchanged"
+            DESIRED_COUNT=$CURRENT_DESIRED_COUNT
+          fi
+          
+          echo "DESIRED_COUNT=${DESIRED_COUNT}" >> $GITHUB_ENV
+          echo "Final desired count will be: ${DESIRED_COUNT}"
+
+      - name: Deploy Amazon ECS task definition
+        id: deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        timeout-minutes: 10
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          force-new-deployment: true
+          desired-count: ${{ env.DESIRED_COUNT }}
+
+      - name: Handle deployment timeout
+        if: failure() && steps.deploy.conclusion == 'cancelled'
+        run: |
+          echo "❌ Deployment failed due to timeout (5 minutes exceeded)"
+          echo "🔍 Check ECS service status manually: ${{ env.ECS_SERVICE }}"
+          exit 1
+
+      - name: Set deployment status
+        id: set-status
+        if: always()
+        run: |
+          if [ "${{ steps.deploy.outcome }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.deploy.outcome }}" == "cancelled" ]; then
+            echo "status=timeout" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deployment summary
+        if: steps.deploy.outcome == 'success'
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo "🚀 Service: ${{ env.ECS_SERVICE }}"
+          echo "📦 Image: ${{ env.IMAGE_URI }}"
+          echo "📝 Task Definition: ${{ steps.deploy.outputs.task-definition-arn }}"

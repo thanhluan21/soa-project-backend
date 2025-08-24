@@ -1,0 +1,34 @@
+services:
+  backend:
+    container_name: backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile-dev
+    ports:
+      - "5001:${PORT:-80}"
+    environment:
+      - FLASK_APP=project/__init__.py
+      - FLASK_DEBUG=1
+      - APP_SETTINGS=project.config.DevelopmentConfig
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_URL=${DB_URL:-db}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-dev}
+      - SECRET_KEY=my_precious
+      - PORT=${PORT:-80}
+    depends_on:
+      - db
+    links:
+      - db
+
+  db:
+    container_name: db
+    build:
+      context: ./backend/project/database
+      dockerfile: Dockerfile
+    ports:
+      - 5435:5432
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres

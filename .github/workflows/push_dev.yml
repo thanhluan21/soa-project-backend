@@ -1,0 +1,32 @@
+name: CI/CD Pipeline - Independent Jobs
+
+on:
+  push:
+    branches: 
+      - 'develop'
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  build-codeland-api:
+    name: Build and Push Codelab API
+    uses: ./.github/workflows/_build_dev.yml
+    secrets: inherit
+    with:
+      image-name: ${{ github.event.repository.name }}
+      aws-account-id: "381492231891"
+      aws-region: us-east-1
+      service-type: codeland-api
+
+  deploy-codeland-api:
+    name: Deploy Codeland API to ECS
+    needs: build-codeland-api
+    uses: ./.github/workflows/_deploy_dev.yml
+    secrets: inherit
+    with:
+      image-name: ${{ github.event.repository.name }}
+      aws-account-id: "381492231891"
+      aws-region: us-east-1
+      service-type: codeland-api

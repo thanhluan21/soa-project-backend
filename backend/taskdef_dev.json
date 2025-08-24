@@ -1,0 +1,110 @@
+{
+    "containerDefinitions": [
+        {
+            "name": "soa-container-codeland-${SERVICE_TYPE}",
+            "image": "${IMAGE_URI}",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "name": "soa-container-codeland-${SERVICE_TYPE}-80-tcp",
+                    "containerPort": 80,
+                    "hostPort": 80,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "ENVIRONMENT",
+                    "value": "${ENVIRONMENT}"
+                },
+                {
+                    "name": "FLASK_APP",
+                    "value": "project/__init__.py"
+                },
+                {
+                    "name": "FLASK_DEBUG",
+                    "value": "1"
+                },
+                {
+                    "name": "APP_SETTINGS",
+                    "value": "project.config.DevelopmentConfig"
+                },
+                {
+                    "name": "PORT",
+                    "value": "80"
+                },
+                {
+                    "name": "DB_PORT",
+                    "value": "5432"
+                },
+                {
+                    "name": "DB_NAME",
+                    "value": "dev"
+                }
+            ],
+            "secrets": [
+                {
+                    "name": "SECRET_KEY",
+                    "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/soa-param-codeland-secret-key"
+                },
+                {
+                    "name": "DB_URL",
+                    "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/soa-param-codeland-db-url"
+                },
+                {
+                    "name": "DB_USER",
+                    "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${SECRET_ARN}:username::"
+                },
+                {
+                    "name": "DB_PASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:${SECRET_ARN}:password::"
+                }
+            ],
+            "environmentFiles": [],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "dockerSecurityOptions": [],
+            "ulimits": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/aws/ecs/soa-ecs-codeland-${SERVICE_TYPE}",
+                    "awslogs-region": "${AWS_REGION}",
+                    "awslogs-stream-prefix": "ecs"
+                },
+                "secretOptions": []
+            },
+            "systemControls": [],
+            "credentialSpecs": []
+        }
+    ],
+    "family": "soa-task-codeland-${SERVICE_TYPE}",
+    "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/soa-iam-codeland-${SERVICE_TYPE}-ecs-task",
+    "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/soa-iam-codeland-${SERVICE_TYPE}-ecs-execution",
+    "networkMode": "awsvpc",
+    "volumes": [],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "256",
+    "memory": "512",
+    "runtimePlatform": {
+        "cpuArchitecture": "X86_64",
+        "operatingSystemFamily": "LINUX"
+    },
+    "tags": [
+        {
+            "key": "SystemID",
+            "value": "SOA"
+        },
+        {
+            "key": "Environment",
+            "value": "${ENVIRONMENT}"
+        },
+        {
+            "key": "Name",
+            "value": "soa-task-codeland-${SERVICE_TYPE}"
+        }
+    ]
+}

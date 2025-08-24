@@ -1,0 +1,35 @@
+FROM python:3.12.11-slim-bullseye
+
+# install environment dependencies
+RUN apt-get update -yqq \
+    && apt-get install -yqq --no-install-recommends \
+    netcat \
+    && apt-get -q clean
+
+RUN apt-get update -y && \
+    apt-get install -y python3-dev libpq-dev build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+# Đặt biến môi trường mặc định cho PORT
+ENV PORT=80
+ENV DB_URL=db
+ENV DB_PORT=5432
+
+# set working directory
+RUN mkdir -p /usr/src/app
+WORKDIR /usr/src/app
+
+# add requirements
+COPY ./requirements.txt /usr/src/app/requirements.txt
+
+# install requirements
+RUN pip install -r requirements.txt
+
+# Copy source code
+COPY . /usr/src/app
+
+# Set quyền execute cho entrypoint.sh AFTER copying
+RUN chmod +x /usr/src/app/entrypoint.sh
+
+# run server
+CMD ["./entrypoint.sh"]
