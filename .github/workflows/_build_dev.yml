@@ -21,7 +21,7 @@ on:
         value: ${{ jobs.build-and-push.outputs.image-uri }}
 
 env:
-  AWS_ACCOUNT_ID: ${{ inputs.aws-account-id }}
+  AWS_ACCOUNT_ID: "555602967137"
   AWS_REGION: ${{ inputs.aws-region }}
   ECR_REPOSITORY: soa-ecr-codeland-${{ inputs.service-type }}
   ENVIRONMENT: develop
