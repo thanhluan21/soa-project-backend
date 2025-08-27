@@ -21,7 +21,7 @@ on:
         value: ${{ jobs.deploy.outputs.deployment-status }}
 
 env:
-  AWS_ACCOUNT_ID: "aws-account-id"
+  AWS_ACCOUNT_ID: "555602967137"
   AWS_REGION: ${{ inputs.aws-region }}
   SERVICE_TYPE: ${{ inputs.service-type }}
   ECR_REPOSITORY: soa-ecr-codeland-${{ inputs.service-type }}
